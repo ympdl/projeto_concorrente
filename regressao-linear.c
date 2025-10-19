@@ -23,12 +23,10 @@ typedef struct {
 // Vetor global onde cada thread guarda suas somas parciais
 Parcial parciais[MAX_THREADS];
 
-
-// =========================== FUNÇÃO THREAD ===========================
 // Cada thread executa esta função para calcular as somas parciais
 void *calcula_somas(void *arg) {
-    long id = (long)arg;  // ID da thread (0, 1, 2, ..., numThreads-1)
-
+    long id = (long)arg;  // ID da thread 
+    
     // Calcula o intervalo (faixa) de índices que essa thread vai processar
     long inicio = id * (N / numThreads);
     long fim = (id == numThreads - 1) ? N : inicio + (N / numThreads);
