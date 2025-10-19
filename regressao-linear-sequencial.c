@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
-#include "timer.h"   // Arquivo de medição de tempo de Pacheco
+#include "timer.h"   // Arquivo de medição de tempo de 
 
 int main(int argc, char *argv[]) {
     if (argc < 2) {
@@ -14,7 +14,7 @@ int main(int argc, char *argv[]) {
     double somaX = 0, somaY = 0, somaXY = 0, somaX2 = 0;
     long long n = 0;
     double a, b;
-    double start, finish, elapsed;
+    double start, finish, delta;
 
     // Início da medição de tempo
     GET_TIME(start);
@@ -45,14 +45,14 @@ int main(int argc, char *argv[]) {
 
     // Fim da medição de tempo
     GET_TIME(finish);
-    elapsed = finish - start;
+    delta = finish - start;
 
     // Resultados
     printf("=== Regressão Linear Sequencial ===\n");
     printf("Arquivo: %s\n", argv[1]);
     printf("Número de pontos: %lld\n", n);
     printf("Equação da reta: y = %.6lf + %.6lfx\n", a, b);
-    printf("Tempo de execução: %.6f segundos\n", elapsed);
+    printf("Tempo de execução: %.6f segundos\n", delta);
 
     return 0;
 }
