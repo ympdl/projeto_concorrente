@@ -3,59 +3,72 @@
 #include <pthread.h>
 #include <string.h>
 
-#define MAX_THREADS 16     // Número máximo de threads permitidas
-#define MAX_LINE 256       // Tamanho máximo de uma linha do CSV
+#define MAX_THREADS 16
+#define MAX_LINE 256
 
-// Vetores globais para armazenar os valores de X e Y
 double *X, *Y;
-
-// Quantidade de pontos (linhas válidas do dataset)
 long N = 0;
-
-// Número de threads que o usuário vai escolher
 int numThreads;
 
-// Estrutura que guarda as somas parciais de cada thread
 typedef struct {
     double somaX, somaY, somaX2, somaXY;
 } Parcial;
 
-// Vetor global onde cada thread guarda suas somas parciais
 Parcial parciais[MAX_THREADS];
 
-// Cada thread executa esta função para calcular as somas parciais
+// ==================== FUNÇÃO DE CÁLCULO PARCIAL ====================
 void *calcula_somas(void *arg) {
-    long id = (long)arg;  // ID da thread 
+    long id = (long)arg;  
     
-    // Calcula o intervalo (faixa) de índices que essa thread vai processar
     long inicio = id * (N / numThreads);
     long fim = (id == numThreads - 1) ? N : inicio + (N / numThreads);
 
-    // Variáveis locais para acumular as somas
     double somaX = 0, somaY = 0, somaX2 = 0, somaXY = 0;
 
-    // Cada thread percorre apenas sua parte do vetor (divisão por blocos)
     for (long i = inicio; i < fim; i++) {
-        somaX  += X[i];         // soma dos valores de X
-        somaY  += Y[i];         // soma dos valores de Y
-        somaX2 += X[i] * X[i];  // soma dos quadrados de X
-        somaXY += X[i] * Y[i];  // soma do produto X*Y
+        somaX  += X[i];
+        somaY  += Y[i];
+        somaX2 += X[i] * X[i];
+        somaXY += X[i] * Y[i];
     }
 
-    // Guarda os resultados parciais no vetor global "parciais"
     parciais[id].somaX = somaX;
     parciais[id].somaY = somaY;
     parciais[id].somaX2 = somaX2;
     parciais[id].somaXY = somaXY;
 
-    // Finaliza a thread
     pthread_exit(NULL);
 }
 
+// ==================== NOVA FUNÇÃO: PREVISÃO DE VALORES ====================
+void prever_valores(double A, double B) {
+    char entrada[64];
+    double x;
+
+    printf("\n=== MODO DE PREVISAO ===\n");
+    printf("Digite um valor de X para prever Y (ou 'q' para sair)\n");
+
+    while (1) {
+        printf("X = ");
+        if (scanf("%s", entrada) != 1)
+            break;
+
+        if (strcmp(entrada, "q") == 0 || strcmp(entrada, "sair") == 0)
+            break;
+
+        if (sscanf(entrada, "%lf", &x) == 1) {
+            double y_prev = A + B * x;
+            printf("-> Y previsto = %.6f\n", y_prev);
+        } else {
+            printf("Entrada invalida. Digite um numero ou 'q' para sair.\n");
+        }
+    }
+
+    printf("Saindo do modo de previsao.\n");
+}
 
 // =========================== FUNÇÃO PRINCIPAL ===========================
 int main(int argc, char *argv[]) {
-    // Verifica se o usuário passou os parâmetros corretos
     if (argc < 3) {
         printf("Uso: %s <arquivo.csv> <num_threads>\n", argv[0]);
         return 1;
@@ -63,11 +76,8 @@ int main(int argc, char *argv[]) {
 
     char *nomeArquivo = argv[1];
     numThreads = atoi(argv[2]);
-
-    // Limita o número de threads ao máximo permitido
     if (numThreads > MAX_THREADS) numThreads = MAX_THREADS;
-
-    // ==================== LEITURA DO ARQUIVO CSV ====================
+    if (numThreads <= 0) numThreads = 1;
 
     FILE *arquivo = fopen(nomeArquivo, "r");
     if (!arquivo) {
@@ -77,92 +87,52 @@ int main(int argc, char *argv[]) {
 
     char linha[MAX_LINE];
 
-    // Ignora o cabeçalho (por exemplo, "x,y")
+    // Ignora o cabeçalho
     if (fgets(linha, MAX_LINE, arquivo) == NULL) {
         fprintf(stderr, "Erro: arquivo vazio ou sem cabeçalho.\n");
         fclose(arquivo);
         return 1;
     }
 
-    // Conta o número de linhas (pontos de dados)
     while (fgets(linha, MAX_LINE, arquivo))
         N++;
-
-    if (ferror(arquivo)) {
-        fprintf(stderr, "Aviso: erro ao ler o arquivo '%s'\n", nomeArquivo);
-    }
     fclose(arquivo);
 
-    // Se não houver dados, encerra
     if (N <= 0) {
-        fprintf(stderr, "Erro: nenhum dado encontrado no arquivo '%s'\n", nomeArquivo);
+        fprintf(stderr, "Erro: nenhum dado encontrado.\n");
         return 1;
     }
-
-    // ==================== ALOCAÇÃO DE MEMÓRIA ====================
 
     X = malloc(N * sizeof(double));
     Y = malloc(N * sizeof(double));
-
     if (!X || !Y) {
-        fprintf(stderr, "Erro: falha ao alocar memória para %ld pontos\n", N);
+        fprintf(stderr, "Erro ao alocar memória.\n");
         free(X); free(Y);
         return 1;
     }
-
-    // ==================== LEITURA REAL DOS DADOS ====================
 
     arquivo = fopen(nomeArquivo, "r");
-    if (!arquivo) {
-        perror("Erro ao reabrir o arquivo");
-        free(X); free(Y);
-        return 1;
-    }
-
-    // Ignora novamente o cabeçalho
-    fgets(linha, MAX_LINE, arquivo);
+    fgets(linha, MAX_LINE, arquivo); // ignora cabeçalho
 
     long i = 0;
     while (fgets(linha, MAX_LINE, arquivo)) {
         double x, y;
-
-        // Lê os valores separados por vírgula (ex: "2.3,4.5")
         if (sscanf(linha, "%lf,%lf", &x, &y) == 2) {
-            if (i < N) {
-                X[i] = x;
-                Y[i] = y;
-                i++;
-            }
+            X[i] = x;
+            Y[i] = y;
+            i++;
         }
     }
-
     fclose(arquivo);
-
-    // Ajusta N se alguma linha for inválida
-    if (i != N) {
-        fprintf(stderr, "Aviso: contei %ld linhas mas li %ld pontos. Ajustando N = %ld\n", N, i, i);
-        N = i;
-    }
-
-    if (numThreads <= 0) numThreads = 1;
-
-    // ==================== CRIAÇÃO DAS THREADS ====================
+    N = i;
 
     pthread_t threads[numThreads];
-
-    // Cada thread vai processar uma parte diferente do vetor
     for (long t = 0; t < numThreads; t++)
         pthread_create(&threads[t], NULL, calcula_somas, (void *)t);
-
-    // Aguarda todas as threads terminarem
     for (int t = 0; t < numThreads; t++)
         pthread_join(threads[t], NULL);
 
-    // ==================== ETAPA DE REDUÇÃO ====================
-
-    // Agora somamos todas as parciais em uma soma total
     double somaX = 0, somaY = 0, somaX2 = 0, somaXY = 0;
-
     for (int t = 0; t < numThreads; t++) {
         somaX  += parciais[t].somaX;
         somaY  += parciais[t].somaY;
@@ -170,21 +140,18 @@ int main(int argc, char *argv[]) {
         somaXY += parciais[t].somaXY;
     }
 
-    // ==================== CÁLCULO DA REGRESSÃO ====================
-
     double B = (N * somaXY - somaX * somaY) / (N * somaX2 - somaX * somaX);
     double A = (somaY - B * somaX) / N;
 
-    // ==================== EXIBE RESULTADOS ====================
-
     printf("\n=== RESULTADOS ===\n");
-    printf("Número de pontos: %ld\n", N);
+    printf("Numero de pontos: %ld\n", N);
     printf("A (intercepto): %.6f\n", A);
-    printf("B (inclinação): %.6f\n", B);
+    printf("B (inclinacao): %.6f\n", B);
 
-    // Libera memória
+    // ==================== NOVA PARTE: MODO DE PREVISÃO ====================
+    prever_valores(A, B);
+
     free(X);
     free(Y);
-
     return 0;
 }
