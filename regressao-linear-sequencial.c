@@ -40,7 +40,7 @@ int main(int argc, char *argv[]) {
     char linha[256];
     double *X = NULL, *Y = NULL;
     long long N = 0;
-    long long capacity = 1000; // capacidade inicial
+    long long capacidade = 1000; // capacidade inicial
     double somaX = 0, somaY = 0, somaXY = 0, somaX2 = 0;
     double a, b;
     double start, finish, delta, inicio_total, fim_total;
@@ -48,8 +48,8 @@ int main(int argc, char *argv[]) {
     GET_TIME(inicio_total);  // MEDIÇÃO DO TEMPO TOTAL INICIAL
 
     // Aloca espaço inicial
-    X = malloc(capacity * sizeof(double));
-    Y = malloc(capacity * sizeof(double));
+    X = malloc(capacidade * sizeof(double));
+    Y = malloc(capacidade * sizeof(double));
     if (!X || !Y) {
         fprintf(stderr, "Erro ao alocar memória\n");
         return 1;
@@ -70,10 +70,10 @@ int main(int argc, char *argv[]) {
         double x, y;
         if (sscanf(linha, "%lf,%lf", &x, &y) == 2) {
             // Realoca se necessário
-            if (N >= capacity) {
-                capacity *= 2;
-                X = realloc(X, capacity * sizeof(double));
-                Y = realloc(Y, capacity * sizeof(double));
+            if (N >= capacidade) {
+                capacidade *= 2;
+                X = realloc(X, capacidade * sizeof(double));
+                Y = realloc(Y, capacidade * sizeof(double));
                 if (!X || !Y) {
                     fprintf(stderr, "Erro ao realocar memória\n");
                     fclose(arquivo);

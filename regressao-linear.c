@@ -95,9 +95,9 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
-    int capacity = 10000;  // Capacidade inicial
-    X = malloc(capacity * sizeof(double));
-    Y = malloc(capacity * sizeof(double));
+    int capacidade = 10000;  // Capacidade inicial
+    X = malloc(capacidade * sizeof(double));
+    Y = malloc(capacidade * sizeof(double));
     
     if (!X || !Y) {
         fprintf(stderr, "Erro ao alocar memória inicial\n");
@@ -112,10 +112,10 @@ int main(int argc, char *argv[]) {
         double x, y;
         if (sscanf(linha, "%lf,%lf", &x, &y) == 2) {
             // Realoca se necessário
-            if (N >= capacity) {
-                capacity *= 2;
-                X = realloc(X, capacity * sizeof(double));
-                Y = realloc(Y, capacity * sizeof(double));
+            if (N >= capacidade) {
+                capacidade *= 2;
+                X = realloc(X, capacidade * sizeof(double));
+                Y = realloc(Y, capacidade * sizeof(double));
                 if (!X || !Y) {
                     fprintf(stderr, "Erro ao realocar memória\n");
                     fclose(arquivo);
