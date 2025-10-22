@@ -68,18 +68,18 @@ void prever_valores(double A, double B) {
 }
 
 int main(int argc, char *argv[]) {
-    double inicio, fim;
+    double inicio, fim, inicio_total, fim_total;
 
     if (argc < 3) {
         printf("Uso: %s <arquivo.csv> <num_threads>\n", argv[0]);
         return 1;
     }
 
-    GET_TIME(inicio);  // MEDIÇÃO DO TEMPO INICIAL
-
     char *nomeArquivo = argv[1];
     numThreads = atoi(argv[2]);
 
+    GET_TIME(inicio_total);  // MEDIÇÃO DO TEMPO TOTAL INICIAL
+    
     FILE *arquivo = fopen(nomeArquivo, "r");
     if (!arquivo) {
         perror("Erro ao abrir o arquivo");
@@ -104,6 +104,8 @@ int main(int argc, char *argv[]) {
         fclose(arquivo);
         return 1;
     }
+
+    //GET_TIME(inicio);  // MEDIÇÃO DO TEMPO INICIAL
 
     // LÊ DADOS DO ARQUIVO
     while (fgets(linha, sizeof(linha), arquivo)) {
@@ -134,12 +136,7 @@ int main(int argc, char *argv[]) {
         free(X); free(Y);
         return 1;
     }
-
-    // Ajusta número de threads se necessário
-    if (numThreads > N) {
-        numThreads = N;
-    }
-
+    GET_TIME(inicio);  // MEDIÇÃO DO TEMPO INICIAL
     // Cria e executa threads
     pthread_t threads[numThreads];
     for (long t = 0; t < numThreads; t++) {
@@ -164,6 +161,7 @@ int main(int argc, char *argv[]) {
     double A = (somaY - B * somaX) / N;
 
     GET_TIME(fim);
+    GET_TIME(fim_total);  // MEDIÇÃO DO TEMPO TOTAL FINAL
 
     printf("\n=== RESULTADOS ===\n");
     printf("Numero de pontos: %ld\n", N);
@@ -172,7 +170,8 @@ int main(int argc, char *argv[]) {
     printf("B (inclinacao): %.6f\n", B);
 
     printf("\n=== TEMPOS DE EXECUCAO ===\n");
-    printf("Tempo total: %f segundos\n", fim - inicio);
+    printf("Tempo calculos: %f segundos\n", fim - inicio);
+    printf("Tempo total: %f segundos\n", fim_total - inicio_total);
 
     // Modo de previsão interativo
     prever_valores(A, B);
