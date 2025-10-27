@@ -62,6 +62,14 @@ int main(int argc, char *argv[]) {
         return 1;
     }
 
+      // PULA O CABEÇALHO
+    if (fgets(linha, sizeof(linha), arquivo) == NULL) {
+        fprintf(stderr, "Erro: arquivo vazio ou sem cabeçalho\n");
+        fclose(arquivo);
+        free(X); free(Y);
+        return 1;
+    }
+
     // Início da medição de tempo
     //GET_TIME(start);
 
