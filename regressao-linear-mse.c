@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <pthread.h>
 #include <string.h>
+//#include <math.h>
 #include "timer.h"
 
 // Variáveis globais para armazenar os dados
@@ -14,9 +15,20 @@ int numThreads;      // Número de threads definido pelo usuário
 // Cada thread calcula suas próprias somas localmente
 typedef struct {
     double somaX, somaY, somaX2, somaXY;  // Somas parciais: Σx, Σy, Σx², Σxy
+    double somaErroQuad;                   // Soma parcial do erro quadrático
+
 } Parcial;
 
 Parcial *parciais;  // Array de estruturas para armazenar resultados de cada thread
+
+// Estrutura para passar parâmetros para as threads do MSE
+typedef struct {
+    long id;
+    double A;  // Coeficiente linear
+    double B;  // Coeficiente angular
+    long inicio;
+    long fim;
+} ArgsMSE;
 
 // ==================== FUNÇÃO EXECUTADA POR CADA THREAD ====================
 void *calcula_somas(void *arg) {
@@ -32,6 +44,7 @@ void *calcula_somas(void *arg) {
 
     // Variáveis locais para acumular as somas (evitam conflitos de memória)
     double somaX = 0, somaY = 0, somaX2 = 0, somaXY = 0;
+    double somaErroQuad = 0;  // VARIÁVEL LOCAL PARA ACUMULAR O ERRO QUADRÁTICO
     double x_val, y_val;  // Variáveis temporárias para melhor performance
     
     // Percorre o segmento atribuído a esta thread
@@ -50,8 +63,44 @@ void *calcula_somas(void *arg) {
     parciais[id].somaY = somaY;
     parciais[id].somaX2 = somaX2;
     parciais[id].somaXY = somaXY;
+    parciais[id].somaErroQuad = somaErroQuad;  // Armazena soma parcial do erro quadrático
 
-    pthread_exit(NULL);  // Encerra a thread
+    pthread_exit(NULL); 
+}
+
+// ==================== CALCULO DO MSE EM PARALELO ====================
+// Função executada por cada thread para calcular o Erro Quadrático Médio (MSE)
+void *calcula_mse(void *arg) {
+    // Converte o ponteiro genérico para a estrutura ArgsMSE que contém os parâmetros
+    ArgsMSE *args = (ArgsMSE *)arg;
+    
+    // Variável local para acumular a soma dos erros quadráticos desta thread
+    double somaErroQuad = 0;
+    double x_val, y_val, y_prev, erro;
+    
+    // Loop que processa cada ponto do segmento atribuído a esta thread
+    for (long i = args->inicio; i < args->fim; i++) {
+        // Lê os valores reais de X e Y dos arrays globais
+        x_val = X[i];
+        y_val = Y[i];
+        
+        // Calcula o valor previsto Y usando a equação da regressão linear: ŷ = A + B*x
+        // Usa os coeficientes A e B passados via estrutura de argumentos
+        y_prev = args->A + args->B * x_val;
+        
+        // Calcula o erro (resíduo) = diferença entre valor real e valor previsto
+        erro = y_val - y_prev;
+        
+        // Acumula o quadrado do erro - elimina sinais negativos e penaliza erros grandes
+        somaErroQuad += erro * erro;
+    }
+
+    // Armazena o resultado parcial desta thread na estrutura compartilhada
+    // Usa o ID da thread para escrever na posição correta do array parciais
+    parciais[args->id].somaErroQuad = somaErroQuad;
+
+    // Encerra a thread normalmente
+    pthread_exit(NULL);
 }
 
 // ==================== FUNÇÃO DE PREVISÃO INTERATIVA ====================
@@ -88,7 +137,7 @@ void prever_valores(double A, double B) {
 // =========================== FUNÇÃO PRINCIPAL ===========================
 int main(int argc, char *argv[]) {
     // Variáveis para medição de tempo
-    double inicio, fim;           // Tempo dos cálculos paralelos
+    double inicio, fim, inicio_mse, fim_mse;           // Tempo dos cálculos paralelos
     double inicio_total, fim_total; // Tempo total do programa
     char linha[256];  // Buffer para ler cada linha do arquivo
     int capacidade = 10000;  // Capacidade inicial dos arrays
@@ -163,12 +212,13 @@ int main(int argc, char *argv[]) {
     }
     
     
-    // ==================== CRIAÇÃO E EXECUÇÃO DAS THREADS ====================
+    // ==================== CRIAÇÃO E EXECUÇÃO DAS THREADS (PRIMEIRA FASE) ====================
+    // PRIMEIRA FASE: cálculo das somas para regressão linear
     pthread_t threads[numThreads];  // Array para armazenar identificadores das threads
 
-    GET_TIME(inicio);  // Inicia medição do tempo dos CÁLCULOS PARALELOS
+    GET_TIME(inicio);  // Inicia medição do tempo dos CÁLCULOS PARALELOS (regressão)
     
-    // Cria todas as threads
+    // Cria todas as threads para calcular somas da regressão
     for (long t = 0; t < numThreads; t++) {
         // Cria thread que executará calcula_somas com argumento t (ID da thread)
         pthread_create(&threads[t], NULL, calcula_somas, (void *)t);
@@ -179,7 +229,7 @@ int main(int argc, char *argv[]) {
         pthread_join(threads[t], NULL);
     }
 
-    // ==================== REDUÇÃO DOS RESULTADOS PARCIAIS ====================
+    // ==================== REDUÇÃO DOS RESULTADOS PARCIAIS (REGRESSÃO) ====================
     // Combina resultados de todas as threads em somas globais
     double somaX = 0, somaY = 0, somaX2 = 0, somaXY = 0;
     for (int t = 0; t < numThreads; t++) {
@@ -196,8 +246,47 @@ int main(int argc, char *argv[]) {
     // Fórmula do coeficiente linear A: A = (Σy - B*Σx) / n
     double A = (somaY - B * somaX) / N;
 
-    GET_TIME(fim);           // Fim da medição dos cálculos paralelos
-    GET_TIME(fim_total);     // Fim da medição do tempo TOTAL
+    GET_TIME(fim);  // Fim da medição dos cálculos da regressão
+
+    // ==================== SEGUNDA FASE: CÁLCULO DO MSE EM PARALELO ====================
+
+    ArgsMSE args_mse[numThreads];  // Array de estruturas de argumentos
+    pthread_t threads_mse[numThreads];  // Threads específicas para MSE
+
+    // Prepara argumentos e cria threads para MSE
+    for (long t = 0; t < numThreads; t++) {
+        long base = N / numThreads;
+        long resto = N % numThreads;
+        long inicio = t * base + (t < resto ? t : resto);
+        long fim = inicio + base + (t < resto ? 1 : 0);
+    
+        args_mse[t].id = t;
+        args_mse[t].A = A;  // Passa coeficiente A
+        args_mse[t].B = B;  // Passa coeficiente B  
+        args_mse[t].inicio = inicio;
+        args_mse[t].fim = fim;
+    
+        pthread_create(&threads_mse[t], NULL, calcula_mse, &args_mse[t]);
+}
+
+    // Aguarda threads do MSE
+    for (int t = 0; t < numThreads; t++) {
+        pthread_join(threads_mse[t], NULL);
+    }
+
+    // ==================== REDUÇÃO DOS RESULTADOS PARCIAIS (MSE) ====================
+    // Combina resultados do erro quadrático de todas as threads
+    double somaErroQuadTotal = 0;
+    for (int t = 0; t < numThreads; t++) {
+        somaErroQuadTotal += parciais[t].somaErroQuad;
+    }
+
+    // ==================== CÁLCULO FINAL DO MSE ====================
+    // MSE = (1/n) * Σ(y - ŷ)²
+    double MSE = somaErroQuadTotal / N;
+
+    GET_TIME(fim);  // Fim da medição dos cálculos da regressão
+    GET_TIME(fim_total);  // Fim da medição do tempo TOTAL
 
     // ==================== EXIBIÇÃO DOS RESULTADOS ====================
     printf("\n=== RESULTADOS ===\n");
@@ -205,10 +294,11 @@ int main(int argc, char *argv[]) {
     printf("Threads usadas: %d\n", numThreads);
     printf("A (intercepto): %.6f\n", A);  // Coeficiente linear (intercepto y)
     printf("B (inclinacao): %.6f\n", B);  // Coeficiente angular (inclinação)
+    printf("MSE (Erro Quadratico Medio): %.6f\n", MSE);  // MSE ADICIONADO
 
     printf("\n=== TEMPOS DE EXECUCAO ===\n");
-    printf("Tempo calculos: %f segundos\n", fim - inicio);      // Apenas processamento paralelo
-    printf("Tempo total: %f segundos\n", fim_total - inicio_total); // Programa completo
+    printf("Tempo regressao: %f segundos\n", fim - inicio);        // Tempo da regressão linear
+    printf("Tempo total programa: %f segundos\n", fim_total - inicio_total); // Programa completo
 
     // ==================== MODO INTERATIVO DE PREVISÃO ====================
     prever_valores(A, B);

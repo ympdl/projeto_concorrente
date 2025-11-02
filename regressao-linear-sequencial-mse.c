@@ -1,7 +1,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "timer.h"   // Arquivo de medição de tempo
+#include <math.h>
+#include "timer.h" 
 
 // ==================== FUNÇÃO DE PREVISÃO ====================
 void prever_valores(double A, double B) {
@@ -42,7 +43,7 @@ int main(int argc, char *argv[]) {
     long long N = 0;
     long long capacidade = 1000; // capacidade inicial
     double somaX = 0, somaY = 0, somaXY = 0, somaX2 = 0;
-    double a, b;
+    double a, b, mse;
     double start, finish, delta, inicio_total, fim_total;
 
     GET_TIME(inicio_total);  // MEDIÇÃO DO TEMPO TOTAL INICIAL
@@ -92,7 +93,9 @@ int main(int argc, char *argv[]) {
     }
     fclose(arquivo);
     // ==================== FIM DA LEITURA ====================
-    GET_TIME(start);  // MEDIÇÃO DO TEMPO INICIAL
+    
+    GET_TIME(start);  // MEDIÇÃO DO TEMPO INICIAL DA REGRESSÃO
+    
     // Calcula os coeficientes da regressão linear
     for (long long i = 0; i < N; i++) {
         somaX += X[i];
@@ -104,18 +107,33 @@ int main(int argc, char *argv[]) {
     b = (N * somaXY - somaX * somaY) / (N * somaX2 - somaX * somaX);
     a = (somaY - b * somaX) / N;
 
-    // Fim da medição de tempo
-    GET_TIME(finish);
+    GET_TIME(finish);  // FIM DA MEDIÇÃO DA REGRESSÃO
+    
+    // ==================== CÁLCULO DO MSE ====================
+    double soma_erro_quad = 0.0;
+    // Calcula o Erro Quadrático Médio (MSE)
+    for (long long i = 0; i < N; i++) {
+        double y_prev = a + b * X[i];      // Valor previsto pela regressão
+        double erro = Y[i] - y_prev;       // Diferença entre valor real e previsto
+        soma_erro_quad += erro * erro;     // Acumula o quadrado do erro
+    }
+    
+    mse = soma_erro_quad / N;              // MSE = média dos erros quadráticos
+
+    GET_TIME(finish);  // FIM DA MEDIÇÃO DA REGRESSÃO
     GET_TIME(fim_total);  // MEDIÇÃO DO TEMPO TOTAL FINAL
-    delta = finish - start;
+    
+    delta = finish - start;  // Tempo apenas da regressão
 
     // Resultados
     printf("=== Regressão Linear Sequencial ===\n");
     printf("Arquivo: %s\n", argv[1]);
     printf("Número de pontos: %lld\n", N);
     printf("Equação da reta: y = %.6lf + %.6lfx\n", a, b);
-    printf("Tempo de execução: %.6f segundos\n", delta);
-    printf("Tempo total: %f segundos\n", fim_total - inicio_total);
+    printf("MSE (Erro Quadrático Médio): %.10f\n", mse);
+    printf("\n=== Tempos de Execução ===\n");
+    printf("Tempo da regressão: %.6f segundos\n", delta);
+    printf("Tempo total do programa: %.6f segundos\n", fim_total - inicio_total);
 
     // Libera memória
     free(X);
