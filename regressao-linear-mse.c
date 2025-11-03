@@ -32,15 +32,13 @@ typedef struct {
 
 // ==================== FUNÇÃO EXECUTADA POR CADA THREAD ====================
 void *calcula_somas(void *arg) {
-    long id = (long)arg;  // ID da thread 
+     long id = (long)arg;  // ID da thread 
     
-    long base = N / numThreads;
-    long resto = N % numThreads;
-
     // Calcula o intervalo de trabalho para esta thread
     // Divisão por blocos: cada thread processa um segmento contíguo do array
-    long inicio = id * base + (id < resto ? id : resto);
-    long fim = inicio + base + (id < resto ? 1 : 0);
+    long inicio = id * (N / numThreads);
+    long fim = (id == numThreads - 1) ? N : inicio + (N / numThreads);
+    // A última thread pega os elementos restantes se N não for divisível por numThreads
 
     // Variáveis locais para acumular as somas (evitam conflitos de memória)
     double somaX = 0, somaY = 0, somaX2 = 0, somaXY = 0;
